@@ -56,25 +56,12 @@ static const u8 note_anims[4][3] = {
 #include "character/dad.h"
 #include "character/spook.h"
 #include "character/pico.h"
-#include "character/mom.h"
 #include "character/xmasbf.h"
 #include "character/xmasp.h"
-#include "character/senpai.h"
-#include "character/senpaim.h"
-#include "character/spirit.h"
-#include "character/tank.h"
 #include "character/gf.h"
-#include "character/gfweeb.h"
-#include "character/clucky.h"
 
 #include "stage/dummy.h"
 #include "stage/week1.h"
-#include "stage/week2.h"
-#include "stage/week3.h"
-#include "stage/week4.h"
-#include "stage/week5.h"
-#include "stage/week6.h"
-#include "stage/week7.h"
 
 static const StageDef stage_defs[StageId_Max] = {
 	#include "stagedef_disc1.h"
@@ -139,11 +126,11 @@ static void Stage_ScrollCamera(void)
 		stage.camera.zoom += FIXED_MUL(dz, stage.camera.td);
 		
 		//Shake in Week 4
-		if (stage.stage_id >= StageId_4_1 && stage.stage_id <= StageId_4_3)
-		{
-			stage.camera.x += RandomRange(FIXED_DEC(-1,10),FIXED_DEC(1,10));
-			stage.camera.y += RandomRange(FIXED_DEC(-25,100),FIXED_DEC(25,100));
-		}
+		//if (stage.stage_id >= StageId_4_1 && stage.stage_id <= StageId_4_3)
+		//{
+		//	stage.camera.x += RandomRange(FIXED_DEC(-1,10),FIXED_DEC(1,10));
+		//	stage.camera.y += RandomRange(FIXED_DEC(-25,100),FIXED_DEC(25,100));
+		//}
 	#endif
 	
 	//Update other camera stuff
@@ -301,7 +288,7 @@ static void Stage_NoteCheck(PlayerState *this, u8 type)
 	//Perform note check
 	for (Note *note = stage.cur_note;; note++)
 	{
-		if (!(note->type & NOTE_FLAG_MINE))
+		if (!(note->type & NOTE_FLAG_CAMO))
 		{
 			//Check if note can be hit
 			fixed_t note_fp = (fixed_t)note->pos << FIXED_SHIFT;
@@ -361,14 +348,11 @@ static void Stage_NoteCheck(PlayerState *this, u8 type)
 			//Hit the mine
 			note->type |= NOTE_FLAG_HIT;
 			
-			if (stage.stage_id == StageId_Clwn_4)
-				this->health = -0x7000;
-			else
-				this->health -= 2000;
-			if (this->character->spec & CHAR_SPEC_MISSANIM)
-				this->character->set_anim(this->character, note_anims[type & 0x3][2]);
-			else
-				this->character->set_anim(this->character, note_anims[type & 0x3][0]);
+			//if (stage.stage_id == StageId_1_2)
+			//	this->health = -0x7000;
+			this->health += 240;
+
+			this->character->set_anim(this->character, note_anims[type & 0x3][0]);
 			this->arrow_hitan[type & 0x3] = -1;
 			
 			#ifdef PSXF_NETWORK
@@ -595,47 +579,12 @@ void Stage_DrawTexCol(Gfx_Tex *tex, const RECT *src, const RECT_FIXED *dst, fixe
 	fixed_t wz = dst->w;
 	fixed_t hz = dst->h;
 	
-	if (stage.stage_id >= StageId_6_1 && stage.stage_id <= StageId_6_3)
+	//Don't draw if HUD and is disabled
+	if (tex == &stage.tex_hud0 || tex == &stage.tex_hud1)
 	{
-		//Handle HUD drawing
-		if (tex == &stage.tex_hud0)
-		{
-			#ifdef STAGE_NOHUD
-				return;
-			#endif
-			if (src->y >= 128 && src->y < 224)
-			{
-				//Pixel perfect scrolling
-				xz &= FIXED_UAND;
-				yz &= FIXED_UAND;
-				wz &= FIXED_UAND;
-				hz &= FIXED_UAND;
-			}
-		}
-		else if (tex == &stage.tex_hud1)
-		{
-			#ifdef STAGE_NOHUD
-				return;
-			#endif
-		}
-		else
-		{
-			//Pixel perfect scrolling
-			xz &= FIXED_UAND;
-			yz &= FIXED_UAND;
-			wz &= FIXED_UAND;
-			hz &= FIXED_UAND;
-		}
-	}
-	else
-	{
-		//Don't draw if HUD and is disabled
-		if (tex == &stage.tex_hud0 || tex == &stage.tex_hud1)
-		{
-			#ifdef STAGE_NOHUD
-				return;
-			#endif
-		}
+		#ifdef STAGE_NOHUD
+			return;
+		#endif
 	}
 	
 	fixed_t l = (SCREEN_WIDTH2  << FIXED_SHIFT) + FIXED_MUL(xz, zoom);// + FIXED_DEC(1,2);
@@ -818,7 +767,7 @@ static void Stage_DrawNotes(void)
 				continue;
 			
 			//Miss note if player's note
-			if (!(note->type & (bot | NOTE_FLAG_HIT | NOTE_FLAG_MINE)))
+			if (!(note->type & (bot | NOTE_FLAG_HIT | NOTE_FLAG_CAMO)))
 			{
 				if (stage.mode < StageMode_Net1 || i == ((stage.mode == StageMode_Net1) ? 0 : 1))
 				{
@@ -923,7 +872,7 @@ static void Stage_DrawNotes(void)
 					}
 				}
 			}
-			else if (note->type & NOTE_FLAG_MINE)
+			else if (note->type & NOTE_FLAG_CAMO)
 			{
 				//Don't draw if already hit
 				if (note->type & NOTE_FLAG_HIT)
@@ -944,38 +893,24 @@ static void Stage_DrawNotes(void)
 					note_dst.y = -note_dst.y - note_dst.h;
 				Stage_DrawTex(&stage.tex_hud0, &note_src, &note_dst, stage.bump);
 				
-				if (stage.stage_id == StageId_Clwn_4)
+				
+				//Draw note fire
+				note_src.x = 192 + ((animf_count & 0x1) << 5);
+				note_src.y = 64 + ((animf_count & 0x2) * 24);
+				note_src.w = 32;
+				note_src.h = 48;
+				
+				if (stage.downscroll)
 				{
-					//Draw note halo
-					note_src.x = 160;
-					note_src.y = 128 + ((animf_count & 0x3) << 3);
-					note_src.w = 32;
-					note_src.h = 8;
-					
-					note_dst.y -= FIXED_DEC(6,1);
-					note_dst.h >>= 2;
-					
-					Stage_DrawTex(&stage.tex_hud0, &note_src, &note_dst, stage.bump);
+					note_dst.y += note_dst.h;
+					note_dst.h = note_dst.h * -3 / 2;
 				}
 				else
 				{
-					//Draw note fire
-					note_src.x = 192 + ((animf_count & 0x1) << 5);
-					note_src.y = 64 + ((animf_count & 0x2) * 24);
-					note_src.w = 32;
-					note_src.h = 48;
-					
-					if (stage.downscroll)
-					{
-						note_dst.y += note_dst.h;
-						note_dst.h = note_dst.h * -3 / 2;
-					}
-					else
-					{
-						note_dst.h = note_dst.h * 3 / 2;
-					}
-					Stage_DrawTex(&stage.tex_hud0, &note_src, &note_dst, stage.bump);
+					note_dst.h = note_dst.h * 3 / 2;
 				}
+				Stage_DrawTex(&stage.tex_hud0, &note_src, &note_dst, stage.bump);
+				
 			}
 			else
 			{
@@ -1149,7 +1084,7 @@ static void Stage_LoadChart(void)
 	stage.player_state[1].max_score = 0;
 	for (Note *note = stage.notes; note->pos != 0xFFFF; note++)
 	{
-		if (note->type & (NOTE_FLAG_SUSTAIN | NOTE_FLAG_MINE))
+		if (note->type & (NOTE_FLAG_SUSTAIN | NOTE_FLAG_CAMO))
 			continue;
 		if (note->type & NOTE_FLAG_OPPONENT)
 			stage.player_state[1].max_score += 35;
@@ -1237,8 +1172,8 @@ void Stage_Load(StageId id, StageDiff difficulty, boolean story)
 	stage.story = story;
 	
 	//Load HUD textures
-	if (id >= StageId_6_1 && id <= StageId_6_3)
-		Gfx_LoadTex(&stage.tex_hud0, IO_Read("\\STAGE\\HUD0WEEB.TIM;1"), GFX_LOADTEX_FREE);
+	if (id >= StageId_1_1 && id <= StageId_1_2)
+		Gfx_LoadTex(&stage.tex_hud0, IO_Read("\\STAGE\\HUD0.TIM;1"), GFX_LOADTEX_FREE);
 	else
 		Gfx_LoadTex(&stage.tex_hud0, IO_Read("\\STAGE\\HUD0.TIM;1"), GFX_LOADTEX_FREE);
 	Gfx_LoadTex(&stage.tex_hud1, IO_Read("\\STAGE\\HUD1.TIM;1"), GFX_LOADTEX_FREE);
@@ -1660,9 +1595,9 @@ void Stage_Tick(void)
 				boolean is_bump_step = (stage.song_step & 0xF) == 0;
 				
 				//M.I.L.F bumps
-				if (stage.stage_id == StageId_4_3 && stage.song_step >= (168 << 2) && stage.song_step < (200 << 2))
-					is_bump_step = (stage.song_step & 0x3) == 0;
-				
+				//if (stage.stage_id == StageId_4_3 && stage.song_step >= (168 << 2) && stage.song_step < (200 << 2))
+				//	is_bump_step = (stage.song_step & 0x3) == 0;
+				//
 				//Bump screen
 				if (is_bump_step)
 					stage.bump = FIXED_DEC(103,100);

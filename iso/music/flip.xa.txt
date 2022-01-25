@@ -1,0 +1,4 @@
+1 xa triggeredv.xa 1 0
+1 xa triggeredi.xa 1 1
+1 xa slaughterv.xa 1 2
+1 xa slaughteri.xa 1 3
